@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "aieval-backend"
+version = "0.1.0"
+description = ""
+authors = ["Charan A A <mariswarycharan@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+google-generativeai = "*"
+fastapi = "*"
+uvicorn = "*"
+python-dotenv = "*"
+pydantic = "*"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
