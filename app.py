@@ -2,11 +2,11 @@ from fastapi import FastAPI
 import google.generativeai as genai
 from typing import List
 from pydantic import BaseModel
+import json
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from google.ai.generativelanguage_v1beta.types import content
 from fastapi import FastAPI, Form
-
 app = FastAPI()
     
 
@@ -42,55 +42,29 @@ class InputData(BaseModel):
 
 # Create the model
 generation_config = {
-  "temperature": 0.2,
+  "temperature": 0.5,
   "top_p": 0.95,
   "top_k": 64,
   "max_output_tokens": 10000,
   "response_schema": content.Schema(
     type = content.Type.OBJECT,
-    description = "Evaluate student's answers based on Relevance, Correctness, and Depth of Knowledge, allocate marks, and provide a final score",
+    description = "Comprehensive evaluation of student's answers including raw generated text and the final score.",
+    required = ["generated_text", "final_score"],
     properties = {
-      "question_evaluations": content.Schema(
-        type = content.Type.ARRAY,
-        description = "List of evaluations for each question",
-        items = content.Schema(
-          type = content.Type.OBJECT,
-          properties = {
-            "question_number": content.Schema(
-              type = content.Type.INTEGER,
-              description = "The number of the question being evaluated",
-            ),
-            "relevance_score": content.Schema(
-              type = content.Type.NUMBER,
-              description = "Score for relevance criterion",
-            ),
-            "correctness_score": content.Schema(
-              type = content.Type.NUMBER,
-              description = "Score for correctness criterion",
-            ),
-            "depth_of_knowledge_score": content.Schema(
-              type = content.Type.NUMBER,
-              description = "Score for depth of knowledge criterion",
-            ),
-            "total_score": content.Schema(
-              type = content.Type.NUMBER,
-              description = "Total score for the question",
-            ),
-            "justification": content.Schema(
-              type = content.Type.STRING,
-              description = "Justification for the score awarded",
-            ),
-          },
-        ),
+      "generated_text": content.Schema(
+        type = content.Type.STRING,
+        description = "The raw generated text from the model, containing the detailed evaluation and feedback for each question.",
       ),
       "final_score": content.Schema(
-        type = content.Type.STRING,
-        description = "Final score for the student, presented as 'Student scored X/Total Marks'",
+        type = content.Type.INTEGER,
+        description = "The final cumulative score awarded to the student, representing the sum of scores across all evaluated questions.",
       ),
     },
   ),
   "response_mime_type": "application/json",
 }
+
+
 
 
 # @param ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-1.0-pro"]
@@ -147,7 +121,7 @@ Evaluate the student's answers, allocate up to 2 marks per question based on the
 """
     
     result = get_result_from_gemini(prompt=prompt_template.format(context=context, input_value=input_value))
-    return {"result": result}
+    return {"result": json.loads(result)}
 
 
     
