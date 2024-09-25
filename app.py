@@ -5,12 +5,15 @@ from pydantic import BaseModel
 import json
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+import requests
+from io import BytesIO
 from google.ai.generativelanguage_v1beta.types import content
 from fastapi import FastAPI, Form
-app = FastAPI()
-    
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
-genai.configure(api_key='AIzaSyCN8bK-8lFUKTxMd2dBEgSSIPBsHEbnYig')
+
+genai.configure(api_key='AIzaSyCs_29YQezoMFeogrFqfyjZ0ViGMxgt4ws')
 
 app = FastAPI()
 
@@ -64,16 +67,25 @@ generation_config = {
   "response_mime_type": "application/json",
 }
 
-
-
-
 # @param ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-1.0-pro"]
 model = genai.GenerativeModel('models/gemini-1.5-flash',generation_config=generation_config)
     
-def get_result_from_gemini(prompt):
+def get_result_from_gemini(prompt,image_list):
     global model
-    response = model.generate_content(prompt)
-    return response.text
+    list_of_images = []
+    
+    for image in image_list:
+      response = requests.get(image)
+      img = Image.open(BytesIO(response.content))
+      list_of_images.append(img)
+      
+    if list_of_images:
+        response = model.generate_content(list_of_images + prompt)
+        return response.text
+    else:
+        response = model.generate_content(prompt)
+        return response.text
+
 
 @app.get("/get_result")
 async def submit_form():
@@ -120,7 +132,7 @@ Evaluate the student's answers, allocate up to 2 marks per question based on the
 
 """
     
-    result = get_result_from_gemini(prompt=prompt_template.format(context=context, input_value=input_value))
+    result = get_result_from_gemini(prompt=prompt_template.format(context=context, input_value=input_value),image_list=[])
     return {"result": json.loads(result)}
 
 

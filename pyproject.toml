@@ -13,6 +13,7 @@ fastapi = {extras = ["standard"], version = "^0.112.2"}
 uvicorn = "*"
 python-dotenv = "*"
 pydantic = "*"
+pillow = "^10.4.0"
 
 
 [build-system]
