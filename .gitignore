@@ -2,4 +2,5 @@
 .env
 /__pycache__/
 /.venv
-summa.py
+summa.ipynb
+

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI ,Query
 import google.generativeai as genai
 from typing import List
 from pydantic import BaseModel
@@ -11,9 +11,42 @@ from io import BytesIO
 from google.ai.generativelanguage_v1beta.types import content
 from fastapi import FastAPI, Form
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
+load_dotenv()
 
-genai.configure(api_key='AIzaSyCs_29YQezoMFeogrFqfyjZ0ViGMxgt4ws')
+gemini_api_key = os.environ.get("GEMINI_API_KEY")
+# Get the Supabase URL and Key
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
+
+def get_answer_key_and_student_response(qap_id: str, email_id: str) -> str:
+    answer_key = supabase.table("QATABLE").select("qap").eq("exam_id", qap_id).execute()
+    student_response = supabase.table("RESPONSES").select("answers").eq("email",email_id).eq("exam_id", qap_id).execute()
+    answer_key_data = answer_key.data[0]
+    student_response_data = student_response.data[0]
+    final_answer_key_data = ""
+    for num,i in enumerate(answer_key_data['qap']):
+        final_answer_key_data += f"This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. {str(num + 1)} ) and mark(mark is for perticular mark allocated for this question) for question number {str(num + 1)} "
+        final_answer_key_data +=  "Question : " + i['question'] + '\n'
+        final_answer_key_data += "Answer : " + i['answer'] + '\n'
+        final_answer_key_data += "Prompt : " + i['prompt'] + '\n'
+        final_answer_key_data += "Mark : " + str(i['marks']) + '\n'
+        final_answer_key_data += "-" * 60
+        
+        
+    final_student_response_data = ""
+    for index, (ques, ans) in enumerate(zip(answer_key.data[0]['qap'], list(student_response.data[0]['answers'].values()))):
+        final_student_response_data += "This is student written question and answer for question number " + str(index + 1) + "\n"
+        final_student_response_data += "Question : " + ques['question'] + '\n'
+        final_student_response_data += "Answer : " + ans + '\n'
+        final_student_response_data += "-" * 60
+        
+    return final_answer_key_data, final_student_response_data
+    
+genai.configure(api_key=gemini_api_key)
 
 app = FastAPI()
 
@@ -37,11 +70,6 @@ app.add_middleware(
 @app.get("/")
 async def status_check():    
     return {"status": "Healthy and running project is on live"}
-
-
-class InputData(BaseModel):
-    user_id: str = "123456789"
-
 
 # Create the model
 generation_config = {
@@ -86,24 +114,11 @@ def get_result_from_gemini(prompt,image_list):
         response = model.generate_content(prompt)
         return response.text
 
-
 @app.get("/get_result")
-async def submit_form():
+async def submit_form(qap_id: str = Query(...), email_ip: str = Query(...)):
     
-    context = """
-    1. What is the goal of prediction?
-The goal of prediction is to predict a quantity
-2. List few prediction algorithms.
-Linear regression, polynomial regression, support vector regression
-""" 
-    
-    input_value = """
-    1. What is the goal of prediction?
-The goal of prediction is to predict a quality of water
-2. List few prediction algorithms.
-Linear regression, polynomial regression, support mass regression
-"""
-    
+    answer_key , student_response = get_answer_key_and_student_response(qap_id,email_ip)
+  
     prompt_template = f"""
 You are a highly intelligent and meticulous academic AI assistant tasked with evaluating student answer sheets. Your primary objective is to perform a fair, thorough, and insightful assessment of student responses based on three critical criteria: Relevance, Correctness, and Depth of Knowledge. Your evaluation should not only determine if the student’s response is correct but also consider how well the student has understood and articulated the underlying concepts.
 
@@ -113,7 +128,7 @@ You are a highly intelligent and meticulous academic AI assistant tasked with ev
 3. **Depth of Knowledge**: Analyze the depth and breadth of the student’s understanding as demonstrated in the response. Look for insightful explanations, connections to broader concepts, and a clear demonstration of mastery over the subject matter.
 
 **Scoring Instructions:**
-- Allocate a maximum of 2 marks per question, considering all three criteria together.
+- Allocate marks for each question (marks are given for each question in answer key) based on the above criteria.
 - If a student has answered multiple questions, sum up the marks awarded for each question and provide a final score in the format: *Student scored X/Total Marks*.
 
 **Process:**
@@ -123,16 +138,15 @@ You are a highly intelligent and meticulous academic AI assistant tasked with ev
 4. After evaluating each question individually, sum up the marks to provide a final score.
 
 **Original Answer Key:**
-{context}
+{answer_key}
 
 **Student's Written Answer:**
-{input_value}
+{student_response}
 
-Evaluate the student's answers, allocate up to 2 marks per question based on the overall assessment, provide justifications for the marks awarded, and calculate the final score. If there are 10 questions, for example, you should present the final score as *Student scored X/20* (with 20 being the total possible marks for 10 questions).
+Evaluate the student's answers, allocate marks per question based on the overall assessment, provide justifications for the marks awarded, and calculate the final score. If there are 10 questions, for example, you should present the final score as *Student scored X/20* (with 20 being the total possible marks for 10 questions).
 
 """
-    
-    result = get_result_from_gemini(prompt=prompt_template.format(context=context, input_value=input_value),image_list=[])
+    result = get_result_from_gemini(prompt=prompt_template,image_list=[])
     return {"result": json.loads(result)}
 
 
