@@ -29,7 +29,7 @@ def get_answer_key_and_student_response(qap_id: str, email_id: str) -> str:
     student_response_data = student_response.data[0]
     final_answer_key_data = ""
     for num,i in enumerate(answer_key_data['qap']):
-        final_answer_key_data += f"This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. {str(num + 1)} ) and mark(mark is for perticular mark allocated for this question) for question number {str(num + 1)} "
+        final_answer_key_data += f"This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. {str(num + 1)} ) and mark(mark is for perticular mark allocated for this question) for question number {str(num + 1)} \n " 
         final_answer_key_data +=  "Question : " + i['question'] + '\n'
         final_answer_key_data += "Answer : " + i['answer'] + '\n'
         final_answer_key_data += "Prompt : " + i['prompt'] + '\n'
@@ -79,18 +79,36 @@ generation_config = {
   "max_output_tokens": 10000,
   "response_schema": content.Schema(
     type = content.Type.OBJECT,
-    description = "Comprehensive evaluation of student's answers including raw generated text and the final score.",
-    required = ["generated_text", "final_score"],
+    description = "Comprehensive evaluation of student's answers including detailed question-wise results and final score.",
+    required = ["result", "final_score"],
     properties = {
-      "generated_text": content.Schema(
-        type = content.Type.STRING,
-        description = "The raw generated text from the model, containing the detailed evaluation and feedback for each question.",
+      "result": content.Schema(
+        type = content.Type.ARRAY,
+        description = "An array containing detailed evaluation of each question.",
+        items = content.Schema(
+          type = content.Type.OBJECT,
+          required = ["question_number", "mark", "justification"],
+          properties = {
+            "question_number" : content.Schema(
+              type = content.Type.INTEGER,
+              description = "The question number for each question."
+            ),
+            "mark" : content.Schema(
+              type = content.Type.INTEGER,
+              description = "The mark awarded for each question."
+            ),
+            "justification": content.Schema(
+              type = content.Type.STRING,
+              description = "The raw generated justification from the model, containing the detailed evaluation and feedback for each question."
+            )
+          }
+        )
       ),
       "final_score": content.Schema(
-        type = content.Type.INTEGER,
-        description = "The final cumulative score awarded to the student, representing the sum of scores across all evaluated questions.",
-      ),
-    },
+        type = content.Type.STRING,
+        description = "The final cumulative score awarded to the student, summarizing the total score in the format 'Student scored X/Y'."
+      )
+    }
   ),
   "response_mime_type": "application/json",
 }
@@ -118,7 +136,40 @@ def get_result_from_gemini(prompt,image_list):
 async def submit_form(qap_id: str = Query(...), email_ip: str = Query(...)):
     
     answer_key , student_response = get_answer_key_and_student_response(qap_id,email_ip)
-  
+    
+    
+    answer_key +=  """
+    This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. 2 ) and mark(mark is for perticular mark allocated for this question) for question number 2 
+Question : what is data science
+Answer : Data science is a multidisciplinary field that uses modern tools and techniques to analyze large amounts of data and extract knowledge from it. The goal of data science is to use the insights gained from data to solve problems and make decisions in a variety of fields   
+Prompt : 10 words
+Mark : 5
+"""
+    student_response +=  """
+    This is student written question and answer for question number 2
+    Question : what is data science
+    Answer : Data science is a sports game"""
+    
+    
+    json_format = """
+    {
+      result: [
+        {question_number : _________ ,
+        mark : __________ ,
+        justification : __________ ,
+        },
+        {question_number : _________ ,
+        mark : __________ ,
+        justification : __________ ,
+        },
+        etc...
+        
+      ],
+      final_score : __________,
+    }
+    """
+    
+    
     prompt_template = f"""
 You are a highly intelligent and meticulous academic AI assistant tasked with evaluating student answer sheets. Your primary objective is to perform a fair, thorough, and insightful assessment of student responses based on three critical criteria: Relevance, Correctness, and Depth of Knowledge. Your evaluation should not only determine if the student’s response is correct but also consider how well the student has understood and articulated the underlying concepts.
 
@@ -144,9 +195,11 @@ You are a highly intelligent and meticulous academic AI assistant tasked with ev
 {student_response}
 
 Evaluate the student's answers, allocate marks per question based on the overall assessment, provide justifications for the marks awarded, and calculate the final score. If there are 10 questions, for example, you should present the final score as *Student scored X/20* (with 20 being the total possible marks for 10 questions).
-
+Make the outputs in given JSON format.
+{json_format}
 """
     result = get_result_from_gemini(prompt=prompt_template,image_list=[])
+
     return {"result": json.loads(result)}
 
 
