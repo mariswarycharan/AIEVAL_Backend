@@ -3,4 +3,5 @@
 /__pycache__/
 /.venv
 summa.ipynb
-
+poetry.lock
+pyproject.toml
