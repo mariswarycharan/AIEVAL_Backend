@@ -132,11 +132,17 @@ def get_result_from_gemini(prompt,image_list):
         response = model.generate_content(prompt)
         return response.text
 
-@app.get("/get_result")
-async def submit_form(qap_id: str = Query(...), email_ip: str = Query(...)):
+class InputData(BaseModel):
+    qap_id : str = ""
+    email_ip : str = ""
+
+@app.post("/get_result")
+async def submit_form(data: InputData):
+    
+    qap_id = data.qap_id
+    email_ip = data.email_ip
     
     answer_key , student_response = get_answer_key_and_student_response(qap_id,email_ip)
-    
     
     answer_key +=  """
     This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. 2 ) and mark(mark is for perticular mark allocated for this question) for question number 2 
