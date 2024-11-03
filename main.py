@@ -23,8 +23,8 @@ key: str = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
 def get_answer_key_and_student_response(qap_id: str, email_id: str) -> str:
-    answer_key = supabase.table("QATABLE").select("qap").eq("exam_id", qap_id).execute()
-    student_response = supabase.table("RESPONSES").select("answers").eq("email",email_id).eq("exam_id", qap_id).execute()
+    answer_key = supabase.table("QATABLE").select("qap").eq("question_paper_id", qap_id).execute()
+    student_response = supabase.table("RESPONSES").select("answers").eq("email",email_id).eq("qid", qap_id).execute()
     answer_key_data = answer_key.data[0]
     student_response_data = student_response.data[0]
     final_answer_key_data = ""
@@ -57,6 +57,7 @@ origins = [
     "http://127.0.0.1:3000",
     "http://localhost:3000",
     "http://0.0.0.0:8000",
+    "http://localhost:3000"
 ]
 
 app.add_middleware(
@@ -134,16 +135,18 @@ def get_result_from_gemini(prompt,image_list):
 
 class InputData(BaseModel):
     qap_id : str = ""
-    email_ip : str = ""
+    email_id : str = ""
 
 @app.post("/get_result")
 async def submit_form(data: InputData):
     
+    print("Data received")
+    print(data)
     qap_id = data.qap_id
-    email_ip = data.email_ip
+    email_id = data.email_id
     
-    answer_key , student_response = get_answer_key_and_student_response(qap_id,email_ip)
-    
+    answer_key , student_response = get_answer_key_and_student_response(qap_id,email_id)
+
     answer_key +=  """
     This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. 2 ) and mark(mark is for perticular mark allocated for this question) for question number 2 
 Question : what is data science
