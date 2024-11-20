@@ -24,7 +24,9 @@ supabase: Client = create_client(url, key)
 
 def get_answer_key_and_student_response(qap_id: str, email_id: str) -> str:
     answer_key = supabase.table("QATABLE").select("qap").eq("question_paper_id", qap_id).execute()
+    print(answer_key)
     student_response = supabase.table("RESPONSES").select("answers").eq("email",email_id).eq("qid", qap_id).execute()
+    print(student_response,"--")
     answer_key_data = answer_key.data[0]
     student_response_data = student_response.data[0]
     final_answer_key_data = ""
