@@ -55,12 +55,12 @@ app = FastAPI()
 origins = [
     "http://10.1.75.50:3000",
     "http://10.1.90.220:3000",
-    "https://i-open-roche.vercel.app",
     "http://127.0.0.1:3000",
     "http://localhost:3000",
     "http://0.0.0.0:8000",
     "http://localhost:3000",
     "https://aieval.vercel.app"
+    
 ]
 
 app.add_middleware(
@@ -150,17 +150,17 @@ async def submit_form(data: InputData):
     
     answer_key , student_response = get_answer_key_and_student_response(qap_id,email_id)
 
-    answer_key +=  """
-    This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. 2 ) and mark(mark is for perticular mark allocated for this question) for question number 2 
-Question : what is data science
-Answer : Data science is a multidisciplinary field that uses modern tools and techniques to analyze large amounts of data and extract knowledge from it. The goal of data science is to use the insights gained from data to solve problems and make decisions in a variety of fields   
-Prompt : 10 words
-Mark : 5
-"""
-    student_response +=  """
-    This is student written question and answer for question number 2
-    Question : what is data science
-    Answer : Data science is a sports game"""
+#     answer_key +=  """
+#     This is original question,answer,prompt(prompt is used for evaluating the answer how you want to evaluate it for question no. 2 ) and mark(mark is for perticular mark allocated for this question) for question number 2 
+# Question : what is data science
+# Answer : Data science is a multidisciplinary field that uses modern tools and techniques to analyze large amounts of data and extract knowledge from it. The goal of data science is to use the insights gained from data to solve problems and make decisions in a variety of fields   
+# Prompt : 10 words
+# Mark : 5
+# """
+#     student_response +=  """
+#     This is student written question and answer for question number 2
+#     Question : what is data science
+#     Answer : Data science is a sports game"""
     
     
     json_format = """
