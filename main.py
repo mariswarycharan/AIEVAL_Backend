@@ -59,8 +59,7 @@ origins = [
     "http://localhost:3000",
     "http://0.0.0.0:8000",
     "http://localhost:3000",
-    "https://aieval.vercel.app"
-    
+    "https://aieval.vercel.app"   
 ]
 
 app.add_middleware(
@@ -109,8 +108,8 @@ generation_config = {
         )
       ),
       "final_score": content.Schema(
-        type = content.Type.STRING,
-        description = "The final cumulative score awarded to the student, summarizing the total score in the format 'Student scored X/Y'."
+        type = content.Type.INTEGER,
+        description = "The final cumulative score awarded to the student, finally give the total score in the integer type ( just only score he got ) ''."
       )
     }
   ),
