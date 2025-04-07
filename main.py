@@ -395,9 +395,14 @@ Make the outputs in given JSON format.
 {json_format}
 """
     
-    result = get_result_from_gemini(prompt=prompt_template,image_list=[])
-    
-    result_json = json.loads(result)
+    try:
+        result = get_result_from_gemini(prompt=prompt_template,image_list=[])
+        print("Raw result from Gemini:\n", result)
+        result_json = json.loads(result)
+    except Exception as e:
+        print("Gemini or JSON Error:", str(e))
+        raise HTTPException(status_code=500, detail="Gemini response or JSON parsing failed.")
+
     
     # Fetch additional information needed for PDF generation
     student_name = supabase.table("STUDENT").select("uname").eq("email", email_id).execute().data[0]['uname']    
@@ -408,15 +413,21 @@ Make the outputs in given JSON format.
     student_response_data = student_response_data
     
     # Generate PDF
-    pdf_path = generate_pdf(
-        qap_id=qap_id,
-        email_id=email_id,
-        student_name=student_name,
-        exam_name=exam_name,
-        result_data=result_json,
-        answer_key_data=answer_key_data,
-        student_response_data=student_response_data
-    )
+    try:
+        pdf_path = generate_pdf(
+            qap_id=qap_id,
+            email_id=email_id,
+            student_name=student_name,
+            exam_name=exam_name,
+            result_data=result_json,
+            answer_key_data=answer_key_data,
+            student_response_data=student_response_data
+        )
+        print("PDF generated at:", pdf_path)
+    except Exception as e:
+        print("PDF Generation Error:", str(e))
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
+
     
     # store pdf in mongodb
     # file_id = upload_pdf_to_mongodb(pdf_path)
