@@ -27,8 +27,8 @@ from reportlab.lib.units import inch, cm
 from datetime import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-
+from googleapiclient.http import MediaIoBaseUpload
+from io import BytesIO
 
 load_dotenv()
 
@@ -40,14 +40,10 @@ supabase: Client = create_client(url, key)
 
 def generate_pdf(qap_id: str, email_id: str, student_name: str, exam_name: str, result_data: dict, answer_key_data: list, student_response_data: dict):
 
-    # Create a unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # pdf_dir = "exam_reports"
-    # os.makedirs(pdf_dir, exist_ok=True)
-    filename = f"{email_id}_{qap_id}_{timestamp}.pdf"
+    buffer = BytesIO()
 
     # Setup the document with border frame
-    doc = SimpleDocTemplate(filename, pagesize=A4,
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
                             rightMargin=30, leftMargin=30,
                             topMargin=40, bottomMargin=30)
 
@@ -129,9 +125,11 @@ def generate_pdf(qap_id: str, email_id: str, student_name: str, exam_name: str, 
     content.append(summary)
 
     doc.build(content)
-    return filename
+    
+    buffer.seek(0) # reset buffer position to the beginning
+    return buffer
 
-def upload_pdf_to_mongodb(pdf_path):
+def upload_pdf_to_mongodb(pdf_buffer: BytesIO, filename: str):
     """
     Uploads a PDF file to MongoDB using GridFS.
 
@@ -149,14 +147,16 @@ def upload_pdf_to_mongodb(pdf_path):
     # Initialize GridFS
     fs = gridfs.GridFS(db)
 
-    # Upload the PDF file
-    with open(pdf_path, "rb") as f:
-        file_id = fs.put(f, filename=pdf_path.split("/")[-1])
-    
-    print(f"PDF uploaded successfully. File ID: {file_id}")
+    # Reset buffer position
+    pdf_buffer.seek(0)
+
+    # Upload the buffer directly to GridFS
+    file_id = fs.put(pdf_buffer, filename=filename)
+
+    print(f"PDF uploaded successfully to MongoDB. File ID: {file_id}")
     return file_id
 
-def upload_pdf_to_gdrive(pdf_path):
+def upload_pdf_to_gdrive(pdf_buffer: BytesIO, filename: str):
     """
     Uploads a PDF file to Google Drive and makes it publicly viewable using credentials from .env
 
@@ -187,10 +187,10 @@ def upload_pdf_to_gdrive(pdf_path):
 
     # Upload the file
     file_metadata = {
-        'name': os.path.basename(pdf_path),
+        'name': filename,
         'mimeType': 'application/pdf'
     }
-    media = MediaFileUpload(pdf_path, mimetype='application/pdf')
+    media = MediaIoBaseUpload(pdf_buffer, mimetype='application/pdf')
     file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
     file_id = file.get('id')
 
@@ -397,12 +397,11 @@ Make the outputs in given JSON format.
     
     try:
         result = get_result_from_gemini(prompt=prompt_template,image_list=[])
-        print("Raw result from Gemini:\n", result)
+        # print("Raw result from Gemini:\n", result)
         result_json = json.loads(result)
     except Exception as e:
         print("Gemini or JSON Error:", str(e))
         raise HTTPException(status_code=500, detail="Gemini response or JSON parsing failed.")
-
     
     # Fetch additional information needed for PDF generation
     student_name = supabase.table("STUDENT").select("uname").eq("email", email_id).execute().data[0]['uname']    
@@ -414,7 +413,7 @@ Make the outputs in given JSON format.
     
     # Generate PDF
     try:
-        pdf_path = generate_pdf(
+        pdf_buffer = generate_pdf(
             qap_id=qap_id,
             email_id=email_id,
             student_name=student_name,
@@ -423,43 +422,29 @@ Make the outputs in given JSON format.
             answer_key_data=answer_key_data,
             student_response_data=student_response_data
         )
-        print("PDF generated at:", pdf_path)
+        print("PDF generated in memory.")
     except Exception as e:
         print("PDF Generation Error:", str(e))
         raise HTTPException(status_code=500, detail="PDF generation failed.")
 
+    filename = f"{email_id}_{qap_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     
     # store pdf in mongodb
-    # file_id = upload_pdf_to_mongodb(pdf_path)
+    # try:
+    #     file_id = upload_pdf_to_mongodb(pdf_buffer=pdf_buffer, filename=filename)
+    # except Exception as e:
+    #     print("MongoDB Upload Error:", str(e))
+    #     raise HTTPException(status_code=500, detail="MongoDB upload failed.")
     
     # store pdf in google drive
-    uploaded_url = upload_pdf_to_gdrive(pdf_path=pdf_path)
+
+    try:
+        uploaded_url = upload_pdf_to_gdrive(pdf_buffer=pdf_buffer, filename=filename)
+    except Exception as e:
+        print("Drive Upload Error:", str(e))
+        raise HTTPException(status_code=500, detail="Google Drive upload failed.")
     
     return {"result": result_json , "examination_report" : uploaded_url }
-
-
-@app.get("/download_pdf/{qap_id}/{email_id}")
-async def download_pdf(qap_id: str, email_id: str):
-    """
-    Download the generated PDF for a specific exam and student
-    """
-    pdf_dir = "exam_reports"
-    # Find the most recent PDF for this student and exam
-    
-    pattern = f"{pdf_dir}/{email_id}_{qap_id}_*.pdf"
-    matching_files = glob.glob(pattern)
-    
-    if not matching_files:
-        raise HTTPException(status_code=404, detail="PDF not found")
-    
-    # Get the most recent file
-    latest_file = max(matching_files, key=os.path.getctime)
-    
-    return FileResponse(
-        path=latest_file,
-        filename=os.path.basename(latest_file),
-        media_type="application/pdf"
-    )
 
 
     
