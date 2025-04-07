@@ -205,12 +205,9 @@ def upload_pdf_to_gdrive(pdf_path):
     print(f"PDF uploaded to Google Drive. Shareable link: {shareable_link}")
     return shareable_link
 
-
 def get_answer_key_and_student_response(qap_id: str, email_id: str) -> str:
   
     response_answer_key = supabase.table("QATABLE").select("qap","exam_name").eq("question_paper_id", qap_id).execute()
-
-
     answer_key = response_answer_key.data[0]['qap']
     exam_name = response_answer_key.data[0]['exam_name']
     
@@ -307,7 +304,7 @@ generation_config = {
 }
 
 # @param ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-1.0-pro"]
-model = genai.GenerativeModel('models/gemini-2.0-flash-thinking-exp-01-21',generation_config=generation_config)
+model = genai.GenerativeModel('models/gemini-2.0-flash',generation_config=generation_config)
     
 def get_result_from_gemini(prompt,image_list):
     global model
@@ -425,8 +422,7 @@ Make the outputs in given JSON format.
     # file_id = upload_pdf_to_mongodb(pdf_path)
     
     # store pdf in google drive
-    credentials_path = "gen-lang-client-0901781875-4b0162e138f0.json"
-    uploaded_url = upload_pdf_to_gdrive(pdf_path=pdf_path, credentials_path= credentials_path)
+    uploaded_url = upload_pdf_to_gdrive(pdf_path=pdf_path)
     
     return {"result": result_json , "examination_report" : uploaded_url }
 
