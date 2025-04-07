@@ -42,9 +42,9 @@ def generate_pdf(qap_id: str, email_id: str, student_name: str, exam_name: str, 
 
     # Create a unique filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    pdf_dir = "exam_reports"
-    os.makedirs(pdf_dir, exist_ok=True)
-    filename = f"{pdf_dir}/{email_id}_{qap_id}_{timestamp}.pdf"
+    # pdf_dir = "exam_reports"
+    # os.makedirs(pdf_dir, exist_ok=True)
+    filename = f"{email_id}_{qap_id}_{timestamp}.pdf"
 
     # Setup the document with border frame
     doc = SimpleDocTemplate(filename, pagesize=A4,
@@ -167,15 +167,15 @@ def upload_pdf_to_gdrive(pdf_path):
     # Build service account info dict
     service_account_info = {
         "type": "service_account",
-        "project_id": os.getenv("GOOGLE_PROJECT_ID"),
-        "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-        "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
-        "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "project_id": os.environ.get("GOOGLE_PROJECT_ID"),
+        "private_key_id": os.environ.get("GOOGLE_PRIVATE_KEY_ID"),
+        "private_key": os.environ.get("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
+        "client_email": os.environ.get("GOOGLE_CLIENT_EMAIL"),
+        "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.getenv('GOOGLE_CLIENT_EMAIL')}",
+        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.environ.get('GOOGLE_CLIENT_EMAIL')}",
         "universe_domain": "googleapis.com"
     }
 
