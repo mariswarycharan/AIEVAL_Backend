@@ -11,3 +11,4 @@ google-auth-oauthlib
 pymongo                                                                                                                               
 reportlab
 pymupdf
+python-multipart

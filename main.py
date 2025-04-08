@@ -465,7 +465,6 @@ def read_pdf_content(file: UploadFile) -> str:
             text += page.get_text()
     return text
 
-
 def generate_exam_report_pdf_for_upload_type(student_name, exam_title, result_json):
     buffer = BytesIO()
 
@@ -635,3 +634,4 @@ Make the outputs in given JSON format.
         raise HTTPException(status_code=500, detail="Google Drive upload failed.")
     
     return {"result": result_json , "examination_report" : uploaded_url }
+
