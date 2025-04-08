@@ -1,4 +1,4 @@
-from fastapi import FastAPI ,Query
+from fastapi import FastAPI ,Query, UploadFile, File
 import google.generativeai as genai
 from typing import List
 from pydantic import BaseModel
@@ -6,7 +6,9 @@ import json
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
+import fitz  # PyMuPDF
 import glob
+from fastapi.staticfiles import StaticFiles
 import requests
 from io import BytesIO
 from google.ai.generativelanguage_v1beta.types import content
@@ -326,6 +328,13 @@ class InputData(BaseModel):
     qap_id : str = ""
     email_id : str = ""
 
+# Serve the static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(os.path.join("static", "favicon.ico"))
+
 @app.post("/get_result")
 async def submit_form(data: InputData):
     
@@ -333,6 +342,9 @@ async def submit_form(data: InputData):
     print(data)
     qap_id = data.qap_id
     email_id = data.email_id
+    
+    if not qap_id or not email_id:
+        raise HTTPException(status_code=400, detail="Missing qap_id or email_id")
     
     answer_key , student_response , exam_name , answer_key , student_response_data = get_answer_key_and_student_response(qap_id,email_id)
 
@@ -437,7 +449,6 @@ Make the outputs in given JSON format.
     #     raise HTTPException(status_code=500, detail="MongoDB upload failed.")
     
     # store pdf in google drive
-
     try:
         uploaded_url = upload_pdf_to_gdrive(pdf_buffer=pdf_buffer, filename=filename)
     except Exception as e:
@@ -446,5 +457,181 @@ Make the outputs in given JSON format.
     
     return {"result": result_json , "examination_report" : uploaded_url }
 
+def read_pdf_content(file: UploadFile) -> str:
+    # Read PDF content using PyMuPDF
+    text = ""
+    with fitz.open(stream=file.file.read(), filetype="pdf") as doc:
+        for page in doc:
+            text += page.get_text()
+    return text
 
+
+def generate_exam_report_pdf_for_upload_type(student_name, exam_title, result_json):
+    buffer = BytesIO()
+
+    # Setup the document with border frame
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            rightMargin=30, leftMargin=30,
+                            topMargin=40, bottomMargin=30)
+
+    styles = getSampleStyleSheet()
+    custom_style = ParagraphStyle(
+        name='CustomBodyText',
+        parent=styles['BodyText'],
+        fontSize=10,
+        leading=14,
+        wordWrap='CJK',
+        alignment=0
+    )
+
+    elements = []
+
+    # Header
+    title_style = styles['Title']
+    title_style.textColor = colors.darkblue
+    elements.append(Paragraph(exam_title, title_style))
+    elements.append(Spacer(1, 0.2 * inch))
+
+    # Student Info
+    elements.append(Paragraph(f"<b>Student Name:</b> {student_name}", styles['Heading3']))
+    elements.append(Spacer(1, 0.1 * inch))
+
+    # Table Header
+    table_data = [[
+        Paragraph("<b>Q. No</b>", styles['Normal']),
+        Paragraph("<b>Mark</b>", styles['Normal']),
+        Paragraph("<b>Feedback</b>", styles['Normal'])
+    ]]
+
+    for item in result_json['result']['result']:
+        question_number = str(item['question_number'])
+        mark = str(item['mark'])
+        justification = Paragraph(item['justification'], custom_style)
+        table_data.append([question_number, mark, justification])
+
+    # Table Style
+    table = Table(table_data, colWidths=[0.8 * inch, 0.8 * inch, 5.5 * inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    elements.append(table)
+    elements.append(Spacer(1, 0.3 * inch))
+
+    # Final Score
+    final_score = result_json['result']['final_score']
+    elements.append(Paragraph(f"<b>Final Score:</b> {final_score}", styles['Heading3']))
+
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+@app.post("/upload-answers/")
+async def upload_pdfs(
+    student_name: str = Form(...),
+    exam_name: str = Form(...),
+    answer_key_file: UploadFile = File(...),
+    student_response_file: UploadFile = File(...)
+):
+    # Validate file types
+    if answer_key_file.content_type != "application/pdf" or student_response_file.content_type != "application/pdf":
+        return {"error": "Both files must be PDF format"}
+
+    # Read contents
+    answer_key = read_pdf_content(answer_key_file)
+    student_response = read_pdf_content(student_response_file)
+
+    json_format = """
+    {
+      result: [
+        {question_number : _________ ,
+        mark : __________ ,
+        justification : __________ ,
+        },
+        {question_number : _________ ,
+        mark : __________ ,
+        justification : __________ ,
+        },
+        etc...
+        
+      ],
+      final_score : __________,
+    }
+    """
     
+    prompt_template = f"""
+You are a highly intelligent and meticulous academic AI assistant tasked with evaluating student answer sheets. Your primary objective is to perform a fair, thorough, and insightful assessment of student responses based on three critical criteria: Relevance, Correctness, and Depth of Knowledge. Your evaluation should not only determine if the student’s response is correct but also consider how well the student has understood and articulated the underlying concepts.
+
+**Evaluation Criteria:**
+1. **Relevance**: Evaluate the extent to which the student’s response directly addresses the question posed. Consider whether the answer stays on topic and fulfills the requirements of the question.
+2. **Correctness**: Assess the accuracy of the information provided by the student. This includes checking facts, figures, and any technical details to ensure the response is factually correct and logically sound.
+3. **Depth of Knowledge**: Analyze the depth and breadth of the student’s understanding as demonstrated in the response. Look for insightful explanations, connections to broader concepts, and a clear demonstration of mastery over the subject matter.
+
+**Scoring Instructions:**
+- Allocate marks for each question (marks are given for each question in answer key) based on the above criteria.
+- If a student has answered multiple questions, sum up the marks awarded for each question and provide a final score in the format: *Student scored X/Total Marks*.
+
+**Process:**
+1. Begin by semantically comparing the student's response to the original answer key.
+2. Reason through the answer step by step to determine if the student has given a correct and relevant response.
+3. If an answer is incorrect or incomplete, provide a brief explanation highlighting the inaccuracies or missing elements.
+4. After evaluating each question individually, sum up the marks to provide a final score.
+
+**Original Answer Key:**
+{answer_key}
+
+**Student's Written Answer:**
+{student_response}
+
+Evaluate the student's answers, allocate marks per question based on the overall assessment, provide justifications for the marks awarded, and calculate the final score. If there are 10 questions, for example, you should present the final score as *Student scored X/20* (with 20 being the total possible marks for 10 questions).
+Make the outputs in given JSON format.
+{json_format}
+"""
+    
+    try:
+        result = get_result_from_gemini(prompt=prompt_template,image_list=[])
+        # print("Raw result from Gemini:\n", result)
+        result_json = json.loads(result)
+    except Exception as e:
+        print("Gemini or JSON Error:", str(e))
+        raise HTTPException(status_code=500, detail="Gemini response or JSON parsing failed.")
+    
+    # Generate PDF
+    try:
+        pdf_buffer = generate_exam_report_pdf_for_upload_type(
+            student_name=student_name,
+            exam_title=exam_name,
+            result_json={ "result" : result_json }
+        )
+        print("PDF generated in memory.")
+    except Exception as e:
+        print("PDF Generation Error:", str(e))
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
+
+    filename = f"{student_name}_{exam_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    
+    # store pdf in mongodb
+    # try:
+    #     file_id = upload_pdf_to_mongodb(pdf_buffer=pdf_buffer, filename=filename)
+    # except Exception as e:
+    #     print("MongoDB Upload Error:", str(e))
+    #     raise HTTPException(status_code=500, detail="MongoDB upload failed.")
+    
+    # store pdf in google drive
+    try:
+        uploaded_url = upload_pdf_to_gdrive(pdf_buffer=pdf_buffer, filename=filename)
+    except Exception as e:
+        print("Drive Upload Error:", str(e))
+        raise HTTPException(status_code=500, detail="Google Drive upload failed.")
+    
+    return {"result": result_json , "examination_report" : uploaded_url }
