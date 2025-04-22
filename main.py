@@ -248,7 +248,8 @@ origins = [
     "http://localhost:3000",
     "http://0.0.0.0:8000",
     "http://localhost:3000",
-    "https://aieval.vercel.app"   
+    "https://aieval.vercel.app",
+    "https://aieval-final.vercel.app/"   
 ]
 
 app.add_middleware(
